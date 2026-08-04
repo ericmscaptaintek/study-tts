@@ -45,7 +45,7 @@
 </div>
 
 <script>
-// ⚠️ 1. 請在下方單引號內，貼上您剛剛在 Google 複製的網頁應用程式 URL
+// 1. 您的 Google 應用程式網址 (完全保持您改對的這串)
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpmOCOMnMcI4g1IddRMI220m4uz1YRV3PFcwUyp54dzg4nSXdmYQkSILSnqMYMlnAzMw/exec'; 
 
 window.onload = function() {
@@ -56,53 +56,58 @@ window.onload = function() {
 };
 
 function fetchCloudData() {
-    fetch(GAS_WEB_APP_URL)
-        .then(res => {
-            if (!res.ok) throw new Error("API連線失敗");
-            return res.json();
-        })
-        .then(jsonData => {
-            const tbody = document.getElementById('vocabTableBody');
-            tbody.innerHTML = ""; // 清空舊內容
+    // 💡 修正關鍵：在 fetch 後方加入 mode: 'cors' 與 follow 重新導向機制，強迫瀏覽器順利通過 Google 的安全檢驗
+    fetch(GAS_WEB_APP_URL, { 
+        method: 'GET',
+        mode: 'cors',
+        redirect: 'follow'
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("API連線失敗");
+        return res.json();
+    })
+    .then(jsonData => {
+        const tbody = document.getElementById('vocabTableBody');
+        tbody.innerHTML = ""; // 清空舊內容
 
-            jsonData.forEach((item) => {
-                if (item.en || item.ch) {
-                    const tr = document.createElement('tr');
-                    tr.className = 'vocab-row';
-                    tr.innerHTML = `
-                        <td><b style="color:#666;">${item.id}</b></td>
-                        <td class="word-text en-text">${item.en}</td>
-                        <td>
-                            <select class="en-rep-select">
-                                <option value="1" selected>1 次</option>
-                                <option value="3">3 次</option>
-                                <option value="5">5 次</option>
-                                <option value="10">10 次</option>
-                            </select>
-                        </td>
-                        <td class="word-text ch-text">${item.ch}</td>
-                        <td>
-                            <select class="ch-rep-select">
-                                <option value="1">1 次</option>
-                                <option value="3" selected>3 次</option>
-                                <option value="5">5 次</option>
-                                <option value="10">10 次</option>
-                            </select>
-                        </td>
-                        <td><button onclick="playRow(this)">開始發音</button></td>
-                    `;
-                    tbody.appendChild(tr);
-                }
-            });
-
-            // 成功載入，切換畫面顯示
-            document.getElementById('loadingText').style.display = 'none';
-            document.getElementById('mainTable').style.display = 'table';
-        })
-        .catch(err => {
-            console.error(err);
-            document.getElementById('loadingText').innerHTML = "❌ 雲端資料解析失敗。<br><small style='font-weight:normal;color:#999;'>請確認 Google 部署時「誰可以存取」有選擇「任何人」，並重新提交程式碼。</small>";
+        jsonData.forEach((item) => {
+            if (item.en || item.ch) {
+                const tr = document.createElement('tr');
+                tr.className = 'vocab-row';
+                tr.innerHTML = `
+                    <td><b style="color:#666;">${item.id}</b></td>
+                    <td class="word-text en-text">${item.en}</td>
+                    <td>
+                        <select class="en-rep-select">
+                            <option value="1" selected>1 次</option>
+                            <option value="3">3 次</option>
+                            <option value="5">5 次</option>
+                            <option value="10">10 次</option>
+                        </select>
+                    </td>
+                    <td class="word-text ch-text">${item.ch}</td>
+                    <td>
+                        <select class="ch-rep-select">
+                            <option value="1">1 次</option>
+                            <option value="3" selected>3 次</option>
+                            <option value="5">5 次</option>
+                            <option value="10">10 次</option>
+                        </select>
+                    </td>
+                    <td><button onclick="playRow(this)">開始發音</button></td>
+                `;
+                tbody.appendChild(tr);
+            }
         });
+
+        // 成功載入，切換畫面顯示
+        document.getElementById('loadingText').style.display = 'none';
+        document.getElementById('mainTable').style.display = 'table';
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById('loadingText').innerHTML = "❌ 雲端資料解析失敗。<br><small style='font-weight:normal;color:#999;'>請確認 Google 部署時「誰可以存取」有選擇「任何人」，並重新提交程式碼。</small>";
+    });
 }
 
 function playRow(button) {
@@ -144,5 +149,3 @@ function playRow(button) {
     executeNextTask();
 }
 </script>
-</body>
-</html>
