@@ -3,80 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語重覆學習工具</title>
+    <title>雙語表格學習工具 (進階版)</title>
     <style>
-        body { font-family: -apple-system, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: #f0f2f5; }
-        .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1a1a1a; margin-top: 0; }
-        label { display: block; margin: 16px 0 8px; font-weight: bold; color: #444; }
-        input, select, button { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
-        input:focus, select:focus { border-color: #007bff; outline: none; }
-        button { background: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.2s; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #333; margin-bottom: 20px; }
+        
+        /* 管理者登入區樣式 */
+        .admin-bar { background: #e9ecef; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+        .admin-controls { display: none; } /* 預設隱藏，密碼正確才顯示 */
+        .admin-bar input[type="password"] { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; }
+        
+        /* 表格樣式 */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 15px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background-color: #f1f3f5; color: #495057; font-weight: bold; }
+        
+        /* 輸入框樣式 */
+        input[type="text"] { width: 95%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; text-align: center; font-size: 15px; }
+        /* 非管理者狀態下鎖定輸入框 */
+        input[type="text"]:disabled { background-color: #ffffff; border: none; color: #333; cursor: default; }
+        
+        /* 選單與按鈕 */
+        select { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; background: white; font-size: 15px; }
+        button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; }
         button:hover { background: #0056b3; }
-        .hint { font-size: 13px; color: #666; margin-top: -5px; margin-bottom: 15px; }
+        .btn-add { background: #28a745; margin-top: 15px; }
+        .btn-add:hover { background: #218838; }
+        .btn-admin { background: #6c757d; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>雙語語音學習卡</h2>
+<div class="container">
+    <h2>雙語學習表格</h2>
     
-    <label for="textInput">輸入要學習的內容：</label>
-    <input type="text" id="textInput" placeholder="例如：apple, 蘋果" value="hello, 你好">
-    <div class="hint">💡 請依序輸入「英文, 中文」，中間用逗號隔開。</div>
-    
-    <label for="repeatCount">設定重複次數：</label>
-    <select id="repeatCount">
-        <option value="1">1 次</option>
-        <option value="2">2 次</option>
-        <option value="3" selected>3 次</option>
-        <option value="5">5 次</option>
-        <option value="10">10 次</option>
-    </select>
-    
-    <button onclick="startLearning()">🎵 開始發音</button>
+    <!-- 1. 管理者密碼驗證區 -->
+    <div class="admin-bar">
+        <div>
+            <label id="statusLabel" style="font-weight: bold; color: #666;">目前狀態：學生模式 (僅供讀取發音)</label>
+        </div>
+        <div>
+            <input type="password" id="pwdInput" placeholder="輸入管理者密碼">
+            <button class="btn-admin" onclick="verifyPassword()">登入解鎖</button>
+        </div>
+    </div>
+
+    <!-- 2. 主學習表格 -->
+    <table>
+        <thead>
+            <tr>
+                <th colspan="2">輸入要學習的內容<br><small style="font-weight:normal; color:#666;">Enter what you want to learn</small></th>
+                <th>設定重複次數<br><small style="font-weight:normal; color:#666;">Set the number of repetitions</small></th>
+                <th>開始發音</th>
+            </tr>
+        </thead>
+        <tbody id="vocabTableBody">
+            <!-- 預設第一行範例 -->
+            <tr class="vocab-row">
+                <td><input type="text" class="en-input" value="hello" disabled></td>
+                <td><input type="text" class="ch-input" value="你好" disabled></td>
+                <td>
+                    <select class="rep-select">
+                        <option value="1">1</option>
+                        <option value="3" selected>3</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                    </select>
+                </td>
+                <td><button onclick="playRow(this)">開始發音</button></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- 3. 管理者專用按鈕 (預設隱藏) -->
+    <div id="adminControls" class="admin-controls">
+        <button class="btn-add" onclick="addNewRow()">➕ 無限制新增下一行</button>
+    </div>
 </div>
 
 <script>
-function startLearning() {
+// 預設管理者密碼設為 1234 (您可以自行更改下方字串)
+const ADMIN_PASSWORD = "1234"; 
+let isAdmin = false;
+
+// 驗證密碼
+function verifyPassword() {
+    const input = document.getElementById('pwdInput').value;
+    if (input === ADMIN_PASSWORD) {
+        isAdmin = true;
+        document.getElementById('statusLabel').innerText = "目前狀態：管理者模式 (可編輯/新增內容)";
+        document.getElementById('statusLabel').style.color = "#28a745";
+        document.getElementById('adminControls').style.display = "block";
+        
+        // 解鎖所有輸入框
+        document.querySelectorAll('.en-input, .ch-input').forEach(el => el.disabled = false);
+        document.getElementById('pwdInput').value = "";
+        alert("解鎖成功！您現在可以任意修改內容或新增欄位了。");
+    } else {
+        alert("密碼錯誤，請重新輸入！");
+    }
+}
+
+// ➕ 無限制新增一行
+function addNewRow() {
+    const tbody = document.getElementById('vocabTableBody');
+    const tr = document.createElement('tr');
+    tr.className = 'vocab-row';
+    tr.innerHTML = `
+        <td><input type="text" class="en-input" placeholder="請輸入英文"></td>
+        <td><input type="text" class="ch-input" placeholder="請輸入中文"></td>
+        <td>
+            <select class="rep-select">
+                <option value="1">1</option>
+                <option value="3" selected>3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+            </select>
+        </td>
+        <td><button onclick="playRow(this)">開始發音</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+// 🎵 播放該行語音 (個別獨立控制)
+function playRow(button) {
     const synth = window.speechSynthesis;
     
-    // 如果正在播放，先停止舊的
+    // 如果正在播放，點擊新按鈕會立刻中斷並播放新的
     if (synth.speaking) {
         synth.cancel();
     }
 
-    const rawText = document.getElementById('textInput').value.trim();
-    const repeat = parseInt(document.getElementById('repeatCount').value);
+    // 尋找點擊按鈕所在的那一行資料
+    const row = button.closest('.vocab-row');
+    const enText = row.querySelector('.en-input').value.trim();
+    const chText = row.querySelector('.ch-input').value.trim();
+    const repeat = parseInt(row.querySelector('.rep-select').value);
     
-    if (!rawText) {
-        alert("請輸入內容");
-        return;
-    }
-
-    // 用逗號切開英文與中文
-    const parts = rawText.split(/[,，]/);
-    const enText = parts[0] ? parts[0].trim() : "";
-    const chText = parts[1] ? parts[1].trim() : "";
-
     if (!enText || !chText) {
-        alert("格式錯誤！請輸入例如 'apple, 蘋果' 的格式（要有英文和中文）");
+        alert("請確認該行的英文與中文皆已輸入內容！");
         return;
     }
 
-    // 依據重複次數將語音排入佇列
+    // 依據重複次數排入發音佇列
     for (let i = 0; i < repeat; i++) {
-        // 建立英文語音
+        // 1. 英文發音設定
         const speakEn = new SpeechSynthesisUtterance(enText);
         speakEn.lang = 'en-US';
-        speakEn.rate = 0.85; // 語速稍微放慢
+        speakEn.rate = 0.75; // 💡 依要求調慢語速 (預設為 1.0，0.75 會明顯變慢且清晰)
         
-        // 建立中文語音
+        // 2. 中文發音設定
         const speakCh = new SpeechSynthesisUtterance(chText);
         speakCh.lang = 'zh-TW';
-        speakCh.rate = 1.0;
+        speakCh.rate = 0.85; // 中文語速也稍微調慢，聽得更清楚
 
-        // 排隊播放
+        // 依序排隊播放 (先英後中)
         synth.speak(speakEn);
         synth.speak(speakCh);
     }
