@@ -3,203 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (原生地基穩定版)</title>
+    <title>雙語表格學習工具 (雲端試算表同步版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        h2 { text-align: center; color: #333; margin-bottom: 20px; }
-        .admin-bar { background: #e9ecef; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-        .admin-controls { display: none; }
-        .admin-bar input[type="password"] { padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; }
+        h2 { text-align: center; color: #333; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 25px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 15px; }
         th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
         th { background-color: #f1f3f5; color: #495057; font-weight: bold; }
-        input[type="text"] { width: 95%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; text-align: center; font-size: 15px; }
-        input[type="text"]:disabled { background-color: #ffffff; border: none; color: #333; cursor: default; }
+        .word-text { font-size: 16px; font-weight: 500; color: #333; }
         select { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; background: white; font-size: 15px; }
         button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; }
         button:hover { background: #0056b3; }
-        .btn-add { background: #28a745; margin-top: 15px; }
-        .btn-add:hover { background: #218838; }
-        .btn-admin { background: #6c757d; }
+        .loading { text-align: center; padding: 30px; font-size: 18px; color: #666; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>雙語學習表格</h2>
-    
-    <div class="admin-bar">
-        <div><label id="statusLabel" style="font-weight: bold; color: #666;">目前狀態：學生模式 (僅供讀取發音)</label></div>
-        <div>
-            <input type="password" id="pwdInput" placeholder="輸入管理者密碼">
-            <button class="btn-admin" onclick="verifyPassword()">登入解鎖</button>
-        </div>
-    </div>
+    <div class="subtitle">📊 內容已與雲端試算表即時同步 (學生唯讀發音模式)</div>
 
-    <table>
+    <div id="loadingText" class="loading">⏳ 正在從雲端載入最新單字清單，請稍候...</div>
+
+    <table id="mainTable" style="display:none;">
         <thead>
             <tr>
+                <th style="width: 8%;">排序</th>
                 <th>英文內容<br><small style="font-weight:normal; color:#666;">English</small></th>
-                <th>英文次數<br><small style="font-weight:normal; color:#666;">EN Repeat</small></th>
+                <th style="width: 15%;">英文次數<br><small style="font-weight:normal; color:#666;">EN Repeat</small></th>
                 <th>中文內容<br><small style="font-weight:normal; color:#666;">Chinese</small></th>
-                <th>中文次數<br><small style="font-weight:normal; color:#666;">CH Repeat</small></th>
-                <th>開始發音</th>
+                <th style="width: 15%;">中文次數<br><small style="font-weight:normal; color:#666;">CH Repeat</small></th>
+                <th style="width: 15%;">開始發音</th>
             </tr>
         </thead>
         <tbody id="vocabTableBody">
-            <tr class="vocab-row">
-                <td><input type="text" class="en-input" value="hello" disabled></td>
-                <td>
-                    <select class="en-rep-select">
-                        <option value="1">1</option>
-                        <option value="3" selected>3</option>
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                    </select>
-                </td>
-                <td><input type="text" class="ch-input" value="你好" disabled></td>
-                <td>
-                    <select class="ch-rep-select">
-                        <option value="1" selected>1</option>
-                        <option value="3">3</option>
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                    </select>
-                </td>
-                <td><button onclick="playRow(this)">開始發音</button></td>
-            </tr>
+            <!-- 由 Google 試算表自動填入內容 -->
         </tbody>
     </table>
-
-    <div id="adminControls" class="admin-controls">
-        <button class="btn-add" onclick="addNewRow()">➕ 無限制新增下一行</button>
-    </div>
 </div>
 
 <script>
-const ADMIN_PASSWORD = "1234"; 
-let isAdmin = false;
+// ⚠️ 請在下方單引號內，貼上您的 Google 試算表 ID
+const SPREADSHEET_ID = 'https://docs.google.com/spreadsheets/d/1FFCYj5HC62m7Pmqp25K9J7yJs2pK7uk_LcZjUcjP7H8/edit?usp=sharing'; 
 
-// 網頁加載時立刻向手機系統註冊並加載語音清單
-if ('speechSynthesis' in window) {
-    window.speechSynthesis.getVoices();
-    if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+// 利用 Google Visualization API 將試算表轉為 JSON 格式抓取
+const GOOGLE_SHEET_URL = `https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
+
+window.onload = function() {
+    fetchCloudData();
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
     }
+};
+
+// 📂 從雲端 Google 試算表自動抓取資料
+function fetchCloudData() {
+    fetch(GOOGLE_SHEET_URL)
+        .then(res => res.text())
+        .then(data => {
+            // 清理 Google 回傳的 JSON 外殼文字
+            const jsonData = JSON.parse(data.substring(47, data.length - 2));
+            const rows = jsonData.table.rows;
+            const tbody = document.getElementById('vocabTableBody');
+            tbody.innerHTML = ""; // 清空舊內容
+
+            rows.forEach((row) => {
+                // 抓取各欄位內容 (確保有資料，若為空則給空白字串)
+                const id = row.c[0] ? row.c[0].v : '';
+                const en = row.c[1] ? row.c[1].v : '';
+                const ch = row.c[2] ? row.c[2].v : '';
+
+                // 如果英文或中文有內容才顯示
+                if (en || ch) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'vocab-row';
+                    tr.innerHTML = `
+                        <td><b style="color:#666;">${id}</b></td>
+                        <td class="word-text en-text">${en}</td>
+                        <td>
+                            <select class="en-rep-select">
+                                <option value="1" selected>1</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                            </select>
+                        </td>
+                        <td class="word-text ch-text">${ch}</td>
+                        <td>
+                            <select class="ch-rep-select">
+                                <option value="1">1</option>
+                                <option value="3" selected>3</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                            </select>
+                        </td>
+                        <td><button onclick="playRow(this)">開始發音</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            });
+
+            // 隱藏加載文字，顯示表格
+            document.getElementById('loadingText').style.display = 'none';
+            document.getElementById('mainTable').style.display = 'table';
+        })
+        .catch(err => {
+            console.error(err);
+            document.getElementById('loadingText').innerText = "❌ 雲端連線失敗，請檢查試算表 ID 是否正確，並確認已開啟「知道連結的任何人」權限。";
+        });
 }
 
-function verifyPassword() {
-    const input = document.getElementById('pwdInput').value;
-    if (input === ADMIN_PASSWORD) {
-        isAdmin = true;
-        document.getElementById('statusLabel').innerText = "目前狀態：管理者模式 (可編輯/新增內容)";
-        document.getElementById('statusLabel').style.color = "#28a745";
-        document.getElementById('adminControls').style.display = "block";
-        document.querySelectorAll('.en-input, .ch-input').forEach(el => el.disabled = false);
-        document.getElementById('pwdInput').value = "";
-        alert("解鎖成功！");
-    } else {
-        alert("密碼錯誤！");
-    }
-}
-
-function addNewRow() {
-    const tbody = document.getElementById('vocabTableBody');
-    const tr = document.createElement('tr');
-    tr.className = 'vocab-row';
-    tr.innerHTML = `
-        <td><input type="text" class="en-input" placeholder="請輸入英文"></td>
-        <td>
-            <select class="en-rep-select">
-                <option value="1">1</option>
-                <option value="3" selected>3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-        </td>
-        <td><input type="text" class="ch-input" placeholder="請輸入中文"></td>
-        <td>
-            <select class="ch-rep-select">
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-        </td>
-        <td><button onclick="playRow(this)">開始發音</button></td>
-    `;
-    tbody.appendChild(tr);
-}
-
-// 🎵 採用內建最高規格、無網路依賴的鏈式安全播放機制
+// 🎵 穩定版發音核心
 function playRow(button) {
-    if (!('speechSynthesis' in window)) {
-        alert("抱歉，您的裝置或瀏覽器不支援語音播放功能。");
-        return;
-    }
-
+    if (!('speechSynthesis' in window)) { return alert("瀏覽器不支援語音。"); }
     const synth = window.speechSynthesis;
-    synth.cancel(); // 徹底中斷任何卡住的舊語音
+    synth.cancel(); 
 
     const row = button.closest('.vocab-row');
-    const enText = row.querySelector('.en-input').value.trim();
-    const chText = row.querySelector('.ch-input').value.trim();
+    const enText = row.querySelector('.en-text').innerText.trim();
+    const chText = row.querySelector('.ch-text').innerText.trim();
     const enRepeat = parseInt(row.querySelector('.en-rep-select').value);
     const chRepeat = parseInt(row.querySelector('.ch-rep-select').value);
     
-    if (!enText || !chText) { alert("請確認輸入內容！"); return; }
-
-    // 建立排隊隊列
     let playTasks = [];
-
-    // 1. 排入英文任務
-    for (let i = 0; i < enRepeat; i++) {
-        playTasks.push({ text: enText, type: 'en' });
-    }
-    // 2. 排入中文任務
-    for (let j = 0; j < chRepeat; j++) {
-        playTasks.push({ text: chText, type: 'ch' });
-    }
+    for (let i = 0; i < enRepeat; i++) { playTasks.push({ text: enText, type: 'en' }); }
+    for (let j = 0; j < chRepeat; j++) { playTasks.push({ text: chText, type: 'ch' }); }
 
     let currentIndex = 0;
-
     function executeNextTask() {
-        if (currentIndex >= playTasks.length) return; // 播放完畢退場
-
+        if (currentIndex >= playTasks.length) return;
         const currentTask = playTasks[currentIndex];
         const utterance = new SpeechSynthesisUtterance(currentTask.text);
         const allVoices = synth.getVoices();
 
         if (currentTask.type === 'en') {
-            utterance.lang = 'en-US';
-            utterance.rate = 0.75; // 慢速英文
+            utterance.lang = 'en-US'; utterance.rate = 0.75;
             const enVoice = allVoices.find(v => v.lang.includes('en'));
             if (enVoice) utterance.voice = enVoice;
         } else {
-            utterance.lang = 'zh-TW';
-            utterance.rate = 0.85; // 慢速中文
-            // 💡 終極相容人聲鎖：模糊搜尋所有手機上可能被命名為繁中、中文、或廣東話的核心人聲
+            utterance.lang = 'zh-TW'; utterance.rate = 0.85;
             const zhVoice = allVoices.find(v => v.lang.includes('zh') || v.lang.includes('Hant') || v.lang.includes('CHT'));
             if (zhVoice) utterance.voice = zhVoice;
         }
 
-        // 當這句播放結束，順暢驅動下一句任務，不觸發手機自動播放阻斷
-        utterance.onend = function() {
-            currentIndex++;
-            executeNextTask();
-        };
-
-        // 萬一出錯也保證不卡死，自動跳播下一句
-        utterance.onerror = function() {
-            currentIndex++;
-            executeNextTask();
-        };
-
+        utterance.onend = function() { currentIndex++; executeNextTask(); };
+        utterance.onerror = function() { currentIndex++; executeNextTask(); };
         synth.speak(utterance);
     }
-
-    // 開始執行語音任務隊列
     executeNextTask();
 }
 </script>
