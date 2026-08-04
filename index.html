@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (Google官方穩定版)</title>
+    <title>雙語表格學習工具 (雲端發布完美同步版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -45,45 +45,44 @@
 </div>
 
 <script>
-// 1. 您的正確試算表 ID (已驗證無誤)
+// 1. 您的正確試算表 ID
 const SPREADSHEET_ID = '1FFCYj5HC62m7Pmqp25K9J7vJs2pK7ukLcZjUcjP7H8'; 
 
-// 2. 標準數據交互接口
-const GOOGLE_SHEET_URL = `https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
+// 2. 💡 換用「發布到網路」的通用 CSV 接口，徹底解除跨網域安全性阻擋
+const GOOGLE_CSV_URL = `https://google.com{SPREADSHEET_ID}/pub?output=csv`;
 
 window.onload = function() {
-    fetchCloudData();
+    fetchCloudCSV();
     if ('speechSynthesis' in window) {
         window.speechSynthesis.getVoices();
     }
 };
 
-function fetchCloudData() {
-    fetch(GOOGLE_SHEET_URL)
-        .then(res => res.text())
-        .then(data => {
-            // 清洗並提取標準 JSON 核心內容
-            const startIdx = data.indexOf('{');
-            const endIdx = data.lastIndexOf('}');
-            if (startIdx === -1 || endIdx === -1) throw new Error("Format error");
-            
-            const cleanJson = data.substring(startIdx, endIdx + 1);
-            const jsonData = JSON.parse(cleanJson);
-            const rows = jsonData.table.rows;
+function fetchCloudCSV() {
+    fetch(GOOGLE_CSV_URL)
+        .then(res => {
+            if (!res.ok) throw new Error("連線失敗");
+            return res.text();
+        })
+        .then(csvText => {
             const tbody = document.getElementById('vocabTableBody');
-            tbody.innerHTML = ""; 
+            tbody.innerHTML = ""; // 清空舊內容
 
-            rows.forEach((row, index) => {
-                // 跳過試算表的第一行標頭 (ID / English / Chinese)
-                if (index === 0) return;
-                if (!row || !row.c) return;
-                
-                // 💡 終極修復核心：安全提取各欄位，不論是數字、字串或空值皆不崩潰
-                const id = (row.c[0] && row.c[0].v !== null) ? (row.c[0].f || row.c[0].v.toString()) : index;
-                const en = (row.c[1] && row.c[1].v !== null) ? row.c[1].v.toString().trim() : "";
-                const ch = (row.c[2] && row.c[2].v !== null) ? row.c[2].v.toString().trim() : "";
+            // 將 CSV 依照換行符號切開成每一行
+            const lines = csvText.split(/\r?\n/);
 
-                // 當英文或中文有一方存在資料時才建立行
+            lines.forEach((line, index) => {
+                // 跳過第一行標頭 (ID, English, Chinese)
+                if (index === 0 || !line.trim()) return;
+
+                // 簡單解析 CSV 逗號分割 (考量可能包含引號，做基礎清理)
+                const cells = line.split(',').map(cell => cell.replace(/^"|"$/g, '').trim());
+
+                const id = cells[0] || index;
+                const en = cells[1] || "";
+                const ch = cells[2] || "";
+
+                // 有內容才顯示
                 if (en || ch) {
                     const tr = document.createElement('tr');
                     tr.className = 'vocab-row';
@@ -113,12 +112,13 @@ function fetchCloudData() {
                 }
             });
 
+            // 成功載入，切換畫面顯示
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('mainTable').style.display = 'table';
         })
         .catch(err => {
             console.error(err);
-            document.getElementById('loadingText').innerHTML = "❌ 雲端連線失敗。<br><small style='font-weight:normal;color:#999;'>請確認網頁已成功部署至 GitHub，並在 1 分鐘後重新整理。</small>";
+            document.getElementById('loadingText').innerHTML = "❌ 雲端同步失敗。<br><small style='font-weight:normal;color:#999;'>請確認已完成試算表「檔案 ➔ 共用 ➔ 發布到網路」的設定，並上傳最新程式碼。</small>";
         });
 }
 
