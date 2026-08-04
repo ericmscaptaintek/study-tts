@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (GAS終極相容發音版)</title>
+    <title>雙語表格學習工具 (文字流終極穩定版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -39,14 +39,14 @@
             </tr>
         </thead>
         <tbody id="vocabTableBody">
-            <!-- 由 GAS 自動安全填入內容 -->
+            <!-- 由文字流自動安全填入內容 -->
         </tbody>
     </table>
 </div>
 
 <script>
-// 1. 您的 Google 應用程式網址 (完全保持這串正確網址)
-const GAS_WEB_APP_URL = 'https://google.com'; 
+// ⚠️ 1. 請在下方單引號內，貼上您剛剛在 Google 複製的最新網頁應用程式 URL
+const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpmOCOMnMcI4g1IddRMI220m4uz1YRV3PFcwUyp54dzg4nSXdmYQkSILSnqMYMlnAzMw/exec'; 
 
 window.onload = function() {
     fetchCloudData();
@@ -56,23 +56,29 @@ window.onload = function() {
 };
 
 function fetchCloudData() {
-    fetch(GAS_WEB_APP_URL, { 
-        method: 'GET',
-        redirect: 'follow'
-    })
+    fetch(GAS_WEB_APP_URL, { method: 'GET', redirect: 'follow' })
     .then(res => {
-        if (!res.ok) throw new Error("API連線失敗");
-        return res.json();
+        if (!res.ok) throw new Error("連線失敗");
+        return res.text(); // 💡 改用純文字串流讀取，完全免疫 JSON 格式錯誤
     })
-    .then(jsonData => {
+    .then(textData => {
+        if (!textData.trim()) {
+            document.getElementById('loadingText').innerHTML = "💡 雲端連線成功，但您的 Google 試算表目前似乎沒有內容。";
+            return;
+        }
+
         const tbody = document.getElementById('vocabTableBody');
         tbody.innerHTML = ""; 
 
-        jsonData.forEach((item) => {
-            // 💡 修正關鍵：同時相容 item.en 或是 item.enText 的模糊抓取法，確保 100% 讀得到欄位
-            const rawId = item.id || "";
-            const rawEn = item.en || item.enText || "";
-            const rawCh = item.ch || item.chText || "";
+        // 依照 ### 切開每一行
+        const lines = textData.split("###");
+
+        lines.forEach((line) => {
+            // 依照 ||| 切開排序、英文、中文
+            const parts = line.split("|||");
+            const rawId = parts[0] || "";
+            const rawEn = parts[1] || "";
+            const rawCh = parts[2] || "";
 
             if (rawEn || rawCh) {
                 const tr = document.createElement('tr');
@@ -112,16 +118,14 @@ function fetchCloudData() {
     });
 }
 
-// 🎵 核心相容發音鏈：精準對接大字表格中的 .en-text 與 .ch-text 元素
 function playRow(button) {
     if (!('speechSynthesis' in window)) { return alert("瀏覽器不支援語音。"); }
     const synth = window.speechSynthesis;
-    synth.cancel(); // 徹底清除可能卡住的舊語音隊列
+    synth.cancel(); 
 
     const row = button.closest('.vocab-row');
     const enText = row.querySelector('.en-text').innerText.trim();
     const chText = row.querySelector('.ch-text').innerText.trim();
-    
     const enRepeat = parseInt(row.querySelector('.en-rep-select').value);
     const chRepeat = parseInt(row.querySelector('.ch-rep-select').value);
     
@@ -132,10 +136,8 @@ function playRow(button) {
     for (let j = 0; j < chRepeat; j++) { playTasks.push({ text: chText, type: 'ch' }); }
 
     let currentIndex = 0;
-
     function executeNextTask() {
         if (currentIndex >= playTasks.length) return; 
-
         const currentTask = playTasks[currentIndex];
         const utterance = new SpeechSynthesisUtterance(currentTask.text);
         const allVoices = synth.getVoices();
@@ -154,7 +156,6 @@ function playRow(button) {
         utterance.onerror = function() { currentIndex++; executeNextTask(); };
         synth.speak(utterance);
     }
-
     executeNextTask();
 }
 </script>
