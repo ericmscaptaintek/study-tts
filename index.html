@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (雲端語音版)</title>
+    <title>雙語表格學習工具 (Google官方語音版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -27,7 +27,7 @@
 <body>
 
 <div class="container">
-    <h2>雙語學習表格 (雲端高音質版)</h2>
+    <h2>雙語學習表格 (Google雲端高音質)</h2>
     
     <div class="admin-bar">
         <div><label id="statusLabel" style="font-weight: bold; color: #666;">目前狀態：學生模式 (僅供讀取發音)</label></div>
@@ -127,10 +127,10 @@ function addNewRow() {
     tbody.appendChild(tr);
 }
 
-// 🎵 雲端安全發音鏈：採用免密鑰免費 API，繞過所有手機硬體限制
+// 🎵 換用 Google 翻譯官方的公開語音 API，解決 HTTPS 安全阻擋與海外地區連線問題
 function playRow(button) {
     const player = document.getElementById('cloudAudioPlayer');
-    player.pause(); // 停止目前播放
+    player.pause(); 
 
     const row = button.closest('.vocab-row');
     const enText = encodeURIComponent(row.querySelector('.en-input').value.trim());
@@ -140,31 +140,34 @@ function playRow(button) {
     
     if (!enText || !chText) { alert("請確認輸入內容！"); return; }
 
-    // 生成微軟高音質雙語語音網址
-    // 英文發音選用：美式英語、慢速（0.75x）
-    const enUrl = `https://baidu.com{enText}&lan=en&cuid=dict&pdt=30&vol=9&spd=3`;
-    // 中文發音選用：繁體/國語通用標準音
-    const chUrl = `https://baidu.com{chText}&lan=zh&cuid=dict&pdt=30&vol=9&spd=4`;
+    // 使用 Google 官方高穩定性雙語 API 網址 (client=twbar 是最安全、免驗證的公開管道)
+    const enUrl = `https://google.com{enText}&tl=en&client=twbar`;
+    const chUrl = `https://google.com{chText}&tl=zh-TW&client=twbar`;
 
     let audioQueue = [];
 
-    // 排入英文
+    // 依照使用者計次，分別排入英文和中文網址
     for (let i = 0; i < enRepeat; i++) { audioQueue.push(enUrl); }
-    // 排入中文
     for (let j = 0; j < chRepeat; j++) { audioQueue.push(chUrl); }
 
     let currentIndex = 0;
 
     function playNext() {
-        if (currentIndex >= audioQueue.length) return; // 播完退出
+        if (currentIndex >= audioQueue.length) return; // 播放隊伍結束
 
         player.src = audioQueue[currentIndex];
-        player.play().catch(err => {
-            console.log("播放受限，跳過此項:", err);
-            currentIndex++;
-            playNext();
-        });
+        
+        // 用程式強制播放，並加上容錯機制
+        const playPromise = player.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log("自動播放受限，跳過此項，驅動下一句", error);
+                currentIndex++;
+                playNext();
+            });
+        }
 
+        // 當這句播完時，順暢驅動下一句
         player.onended = function() {
             currentIndex++;
             playNext();
