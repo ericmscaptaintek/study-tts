@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (GAS雲端完美同步版)</title>
+    <title>雙語表格學習工具 (Google同步完美發音版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -46,7 +46,7 @@
 
 <script>
 // 1. 您的 Google 應用程式網址 (完全保持您改對的這串)
-const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpmOCOMnMcI4g1IddRMI220m4uz1YRV3PFcwUyp54dzg4nSXdmYQkSILSnqMYMlnAzMw/exec'; 
+const GAS_WEB_APP_URL = 'https://google.com'; 
 
 window.onload = function() {
     fetchCloudData();
@@ -56,7 +56,6 @@ window.onload = function() {
 };
 
 function fetchCloudData() {
-    // 💡 修正關鍵：在 fetch 後方加入 mode: 'cors' 與 follow 重新導向機制，強迫瀏覽器順利通過 Google 的安全檢驗
     fetch(GAS_WEB_APP_URL, { 
         method: 'GET',
         mode: 'cors',
@@ -68,7 +67,7 @@ function fetchCloudData() {
     })
     .then(jsonData => {
         const tbody = document.getElementById('vocabTableBody');
-        tbody.innerHTML = ""; // 清空舊內容
+        tbody.innerHTML = ""; 
 
         jsonData.forEach((item) => {
             if (item.en || item.ch) {
@@ -100,52 +99,84 @@ function fetchCloudData() {
             }
         });
 
-        // 成功載入，切換畫面顯示
         document.getElementById('loadingText').style.display = 'none';
         document.getElementById('mainTable').style.display = 'table';
     })
     .catch(err => {
         console.error(err);
-        document.getElementById('loadingText').innerHTML = "❌ 雲端資料解析失敗。<br><small style='font-weight:normal;color:#999;'>請確認 Google 部署時「誰可以存取」有選擇「任何人」，並重新提交程式碼。</small>";
+        document.getElementById('loadingText').innerHTML = "❌ 雲端資料載入失敗，請確認網路連線正常。";
     });
 }
 
+// 🎵 💡 核心相容發音鏈：精準對接大字表格中的 .en-text 與 .ch-text 元素，重現響亮語音！
 function playRow(button) {
     if (!('speechSynthesis' in window)) { return alert("瀏覽器不支援語音。"); }
     const synth = window.speechSynthesis;
-    synth.cancel(); 
+    synth.cancel(); // 徹底清除可能卡住的舊語音隊列
 
     const row = button.closest('.vocab-row');
+    
+    // 正確抓取唯讀文字標籤的內文 (.innerText)
     const enText = row.querySelector('.en-text').innerText.trim();
     const chText = row.querySelector('.ch-text').innerText.trim();
+    
     const enRepeat = parseInt(row.querySelector('.en-rep-select').value);
     const chRepeat = parseInt(row.querySelector('.ch-rep-select').value);
     
+    if (!enText || !chText) { alert("發音內容不可為空！"); return; }
+
+    // 建立排隊任務清單
     let playTasks = [];
-    for (let i = 0; i < enRepeat; i++) { playTasks.push({ text: enText, type: 'en' }); }
-    for (let j = 0; j < chRepeat; j++) { playTasks.push({ text: chText, type: 'ch' }); }
+
+    // 1. 根據設定次數排入英文
+    for (let i = 0; i < enRepeat; i++) {
+        playTasks.push({ text: enText, type: 'en' });
+    }
+    // 2. 根據設定次數排入中文
+    for (let j = 0; j < chRepeat; j++) {
+        playTasks.push({ text: chText, type: 'ch' });
+    }
 
     let currentIndex = 0;
+
     function executeNextTask() {
-        if (currentIndex >= playTasks.length) return;
+        if (currentIndex >= playTasks.length) return; // 全部播放完畢
+
         const currentTask = playTasks[currentIndex];
         const utterance = new SpeechSynthesisUtterance(currentTask.text);
         const allVoices = synth.getVoices();
 
         if (currentTask.type === 'en') {
-            utterance.lang = 'en-US'; utterance.rate = 0.75;
+            utterance.lang = 'en-US'; 
+            utterance.rate = 0.75; // 保持清晰慢速
             const enVoice = allVoices.find(v => v.lang.includes('en'));
             if (enVoice) utterance.voice = enVoice;
         } else {
-            utterance.lang = 'zh-TW'; utterance.rate = 0.85;
+            utterance.lang = 'zh-TW'; 
+            utterance.rate = 0.85; // 保持清晰慢速
+            // 模糊搜尋所有可能的手機內建繁中人聲包，保障相容性
             const zhVoice = allVoices.find(v => v.lang.includes('zh') || v.lang.includes('Hant') || v.lang.includes('CHT'));
             if (zhVoice) utterance.voice = zhVoice;
         }
 
-        utterance.onend = function() { currentIndex++; executeNextTask(); };
-        utterance.onerror = function() { currentIndex++; executeNextTask(); };
+        // 鏈式觸發安全鎖：當前任務唸完，自動播放下一句，繞過手機系統的安全封鎖
+        utterance.onend = function() {
+            currentIndex++;
+            executeNextTask();
+        };
+
+        // 萬一出錯也自動跳播下一句，確保永不卡死
+        utterance.onerror = function() {
+            currentIndex++;
+            executeNextTask();
+        };
+
         synth.speak(utterance);
     }
+
+    // 啟動發音排隊鏈
     executeNextTask();
 }
 </script>
+</body>
+</html>
