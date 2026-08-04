@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (雲端試算表同步版)</title>
+    <title>雙語表格學習工具 (萬用相容版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -45,10 +45,10 @@
 </div>
 
 <script>
-// 1. 確保 ID 緊密相連，沒有任何空白鍵（這行您已經改對了！）
+// 1. 填入您的正確試算表 ID（無空格）
 const SPREADSHEET_ID = '1FFCYj5HC62m7Pmqp25K9J7vJs2pK7ukLcZjUcjP7H8'; 
 
-// 2. 💡 必須改成下方這串完整的 docs.google.com 網址路徑
+// 2. 修正後的標準 Google 數據源請求路徑
 const GOOGLE_SHEET_URL = `https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
 
 window.onload = function() {
@@ -58,24 +58,42 @@ window.onload = function() {
     }
 };
 
-// 📂 從雲端 Google 試算表自動抓取資料
 function fetchCloudData() {
     fetch(GOOGLE_SHEET_URL)
         .then(res => res.text())
         .then(data => {
-            // 清理 Google 回傳的 JSON 外殼文字
-            const jsonData = JSON.parse(data.substring(47, data.length - 2));
+            // 清理 Google 回傳的格式外殼
+            const startIdx = data.indexOf('{');
+            const endIdx = data.lastIndexOf('}');
+            if (startIdx === -1 || endIdx === -1) throw new Error("資料格式異常");
+            
+            const cleanJson = data.substring(startIdx, endIdx + 1);
+            const jsonData = JSON.parse(cleanJson);
             const rows = jsonData.table.rows;
             const tbody = document.getElementById('vocabTableBody');
-            tbody.innerHTML = ""; // 清空舊內容
+            tbody.innerHTML = ""; 
 
-            rows.forEach((row) => {
-                // 抓取各欄位內容 (確保有資料，若為空則給空白字串)
-                const id = row.c[0] ? row.c[0].v : '';
-                const en = row.c[1] ? row.c[1].v : '';
-                const ch = row.c[2] ? row.c[2].v : '';
+            rows.forEach((row, index) => {
+                // 跳過試算表第一行標頭 (ID, English, Chinese)
+                if (index === 0) return;
+                if (!row || !row.c) return;
+                
+                // 💡 萬用模糊抓取核心：不論您的資料在哪一欄，依序將第1, 2, 3個有字的值配對為 排序、英文、中文
+                let activeCells = [];
+                row.c.forEach(cell => {
+                    if (cell && cell.v !== null && cell.v !== undefined) {
+                        activeCells.push(cell.v.toString().trim());
+                    } else {
+                        activeCells.push("");
+                    }
+                });
 
-                // 如果英文或中文有內容才顯示
+                // 防呆：至少填滿前三個有效位置
+                const id = activeCells[0] || index;
+                const en = activeCells[1] || "";
+                const ch = activeCells[2] || "";
+
+                // 當英文或中文有一方有資料時，便自動組裝上線，不因空行崩潰
                 if (en || ch) {
                     const tr = document.createElement('tr');
                     tr.className = 'vocab-row';
@@ -84,19 +102,19 @@ function fetchCloudData() {
                         <td class="word-text en-text">${en}</td>
                         <td>
                             <select class="en-rep-select">
-                                <option value="1" selected>1</option>
-                                <option value="3">3</option>
-                                <option value="5">5</option>
-                                <option value="10">10</option>
+                                <option value="1" selected>1 次</option>
+                                <option value="3">3 次</option>
+                                <option value="5">5 次</option>
+                                <option value="10">10 次</option>
                             </select>
                         </td>
                         <td class="word-text ch-text">${ch}</td>
                         <td>
                             <select class="ch-rep-select">
-                                <option value="1">1</option>
-                                <option value="3" selected>3</option>
-                                <option value="5">5</option>
-                                <option value="10">10</option>
+                                <option value="1">1 次</option>
+                                <option value="3" selected>3 次</option>
+                                <option value="5">5 次</option>
+                                <option value="10">10 次</option>
                             </select>
                         </td>
                         <td><button onclick="playRow(this)">開始發音</button></td>
@@ -105,17 +123,15 @@ function fetchCloudData() {
                 }
             });
 
-            // 隱藏加載文字，顯示表格
             document.getElementById('loadingText').style.display = 'none';
             document.getElementById('mainTable').style.display = 'table';
         })
         .catch(err => {
             console.error(err);
-            document.getElementById('loadingText').innerText = "❌ 雲端連線失敗，請檢查試算表 ID 是否正確，並確認已開啟「知道連結的任何人」權限。";
+            document.getElementById('loadingText').innerHTML = "❌ 雲端連線失敗。<br><small style='font-weight:normal;color:#999;'>請確認網路連線正常，並已在 GitHub 上 Commit 最新程式碼。</small>";
         });
 }
 
-// 🎵 穩定版發音核心
 function playRow(button) {
     if (!('speechSynthesis' in window)) { return alert("瀏覽器不支援語音。"); }
     const synth = window.speechSynthesis;
