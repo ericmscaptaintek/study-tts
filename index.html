@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (Google官方語音版)</title>
+    <title>雙語表格學習工具 (原生地基穩定版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -27,7 +27,7 @@
 <body>
 
 <div class="container">
-    <h2>雙語學習表格 (Google雲端高音質)</h2>
+    <h2>雙語學習表格</h2>
     
     <div class="admin-bar">
         <div><label id="statusLabel" style="font-weight: bold; color: #666;">目前狀態：學生模式 (僅供讀取發音)</label></div>
@@ -77,12 +77,17 @@
     </div>
 </div>
 
-<!-- 建立隱藏的音訊播放器 -->
-<audio id="cloudAudioPlayer" style="display:none;"></audio>
-
 <script>
 const ADMIN_PASSWORD = "1234"; 
 let isAdmin = false;
+
+// 網頁加載時立刻向手機系統註冊並加載語音清單
+if ('speechSynthesis' in window) {
+    window.speechSynthesis.getVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+}
 
 function verifyPassword() {
     const input = document.getElementById('pwdInput').value;
@@ -127,54 +132,75 @@ function addNewRow() {
     tbody.appendChild(tr);
 }
 
-// 🎵 換用 Google 翻譯官方的公開語音 API，解決 HTTPS 安全阻擋與海外地區連線問題
+// 🎵 採用內建最高規格、無網路依賴的鏈式安全播放機制
 function playRow(button) {
-    const player = document.getElementById('cloudAudioPlayer');
-    player.pause(); 
+    if (!('speechSynthesis' in window)) {
+        alert("抱歉，您的裝置或瀏覽器不支援語音播放功能。");
+        return;
+    }
+
+    const synth = window.speechSynthesis;
+    synth.cancel(); // 徹底中斷任何卡住的舊語音
 
     const row = button.closest('.vocab-row');
-    const enText = encodeURIComponent(row.querySelector('.en-input').value.trim());
-    const chText = encodeURIComponent(row.querySelector('.ch-input').value.trim());
+    const enText = row.querySelector('.en-input').value.trim();
+    const chText = row.querySelector('.ch-input').value.trim();
     const enRepeat = parseInt(row.querySelector('.en-rep-select').value);
     const chRepeat = parseInt(row.querySelector('.ch-rep-select').value);
     
     if (!enText || !chText) { alert("請確認輸入內容！"); return; }
 
-    // 使用 Google 官方高穩定性雙語 API 網址 (client=twbar 是最安全、免驗證的公開管道)
-    const enUrl = `https://google.com{enText}&tl=en&client=twbar`;
-    const chUrl = `https://google.com{chText}&tl=zh-TW&client=twbar`;
+    // 建立排隊隊列
+    let playTasks = [];
 
-    let audioQueue = [];
-
-    // 依照使用者計次，分別排入英文和中文網址
-    for (let i = 0; i < enRepeat; i++) { audioQueue.push(enUrl); }
-    for (let j = 0; j < chRepeat; j++) { audioQueue.push(chUrl); }
+    // 1. 排入英文任務
+    for (let i = 0; i < enRepeat; i++) {
+        playTasks.push({ text: enText, type: 'en' });
+    }
+    // 2. 排入中文任務
+    for (let j = 0; j < chRepeat; j++) {
+        playTasks.push({ text: chText, type: 'ch' });
+    }
 
     let currentIndex = 0;
 
-    function playNext() {
-        if (currentIndex >= audioQueue.length) return; // 播放隊伍結束
+    function executeNextTask() {
+        if (currentIndex >= playTasks.length) return; // 播放完畢退場
 
-        player.src = audioQueue[currentIndex];
-        
-        // 用程式強制播放，並加上容錯機制
-        const playPromise = player.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.log("自動播放受限，跳過此項，驅動下一句", error);
-                currentIndex++;
-                playNext();
-            });
+        const currentTask = playTasks[currentIndex];
+        const utterance = new SpeechSynthesisUtterance(currentTask.text);
+        const allVoices = synth.getVoices();
+
+        if (currentTask.type === 'en') {
+            utterance.lang = 'en-US';
+            utterance.rate = 0.75; // 慢速英文
+            const enVoice = allVoices.find(v => v.lang.includes('en'));
+            if (enVoice) utterance.voice = enVoice;
+        } else {
+            utterance.lang = 'zh-TW';
+            utterance.rate = 0.85; // 慢速中文
+            // 💡 終極相容人聲鎖：模糊搜尋所有手機上可能被命名為繁中、中文、或廣東話的核心人聲
+            const zhVoice = allVoices.find(v => v.lang.includes('zh') || v.lang.includes('Hant') || v.lang.includes('CHT'));
+            if (zhVoice) utterance.voice = zhVoice;
         }
 
-        // 當這句播完時，順暢驅動下一句
-        player.onended = function() {
+        // 當這句播放結束，順暢驅動下一句任務，不觸發手機自動播放阻斷
+        utterance.onend = function() {
             currentIndex++;
-            playNext();
+            executeNextTask();
         };
+
+        // 萬一出錯也保證不卡死，自動跳播下一句
+        utterance.onerror = function() {
+            currentIndex++;
+            executeNextTask();
+        };
+
+        synth.speak(utterance);
     }
 
-    playNext();
+    // 開始執行語音任務隊列
+    executeNextTask();
 }
 </script>
 </body>
