@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>雙語表格學習工具 (雲端發布完美同步版)</title>
+    <title>雙語表格學習工具 (GAS雲端完美同步版)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; margin: 0; background: #f8f9fa; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
@@ -23,7 +23,7 @@
 
 <div class="container">
     <h2>雙語學習表格</h2>
-    <div class="subtitle">📊 內容已與雲端試算表即時同步 (學生唯讀發音模式)</div>
+    <div class="subtitle">📊 內容已與雲端試算表安全即時同步 (學生唯讀發音模式)</div>
 
     <div id="loadingText" class="loading">⏳ 正在從雲端載入最新單字清單，請稍候...</div>
 
@@ -39,56 +39,39 @@
             </tr>
         </thead>
         <tbody id="vocabTableBody">
-            <!-- 由 Google 試算表自動填入內容 -->
+            <!-- 由 GAS 自動安全填入內容 -->
         </tbody>
     </table>
 </div>
 
 <script>
-// 1. 您的正確試算表 ID
-const SPREADSHEET_ID = '1FFCYj5HC62m7Pmqp25K9J7vJs2pK7ukLcZjUcjP7H8'; 
-
-// 2. 💡 換用「發布到網路」的通用 CSV 接口，徹底解除跨網域安全性阻擋
-const GOOGLE_CSV_URL = `https://google.com{SPREADSHEET_ID}/pub?output=csv`;
+// ⚠️ 1. 請在下方單引號內，貼上您剛剛在 Google 複製的網頁應用程式 URL
+const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpmOCOMnMcI4g1IddRMI220m4uz1YRV3PFcwUyp54dzg4nSXdmYQkSILSnqMYMlnAzMw/exec'; 
 
 window.onload = function() {
-    fetchCloudCSV();
+    fetchCloudData();
     if ('speechSynthesis' in window) {
         window.speechSynthesis.getVoices();
     }
 };
 
-function fetchCloudCSV() {
-    fetch(GOOGLE_CSV_URL)
+function fetchCloudData() {
+    fetch(GAS_WEB_APP_URL)
         .then(res => {
-            if (!res.ok) throw new Error("連線失敗");
-            return res.text();
+            if (!res.ok) throw new Error("API連線失敗");
+            return res.json();
         })
-        .then(csvText => {
+        .then(jsonData => {
             const tbody = document.getElementById('vocabTableBody');
             tbody.innerHTML = ""; // 清空舊內容
 
-            // 將 CSV 依照換行符號切開成每一行
-            const lines = csvText.split(/\r?\n/);
-
-            lines.forEach((line, index) => {
-                // 跳過第一行標頭 (ID, English, Chinese)
-                if (index === 0 || !line.trim()) return;
-
-                // 簡單解析 CSV 逗號分割 (考量可能包含引號，做基礎清理)
-                const cells = line.split(',').map(cell => cell.replace(/^"|"$/g, '').trim());
-
-                const id = cells[0] || index;
-                const en = cells[1] || "";
-                const ch = cells[2] || "";
-
-                // 有內容才顯示
-                if (en || ch) {
+            jsonData.forEach((item) => {
+                if (item.en || item.ch) {
                     const tr = document.createElement('tr');
                     tr.className = 'vocab-row';
                     tr.innerHTML = `
-                        <td><b style="color:#666;">${id}</b></td>
-                        <td class="word-text en-text">${en}</td>
+                        <td><b style="color:#666;">${item.id}</b></td>
+                        <td class="word-text en-text">${item.en}</td>
                         <td>
                             <select class="en-rep-select">
                                 <option value="1" selected>1 次</option>
@@ -97,7 +80,7 @@ function fetchCloudCSV() {
                                 <option value="10">10 次</option>
                             </select>
                         </td>
-                        <td class="word-text ch-text">${ch}</td>
+                        <td class="word-text ch-text">${item.ch}</td>
                         <td>
                             <select class="ch-rep-select">
                                 <option value="1">1 次</option>
@@ -118,7 +101,7 @@ function fetchCloudCSV() {
         })
         .catch(err => {
             console.error(err);
-            document.getElementById('loadingText').innerHTML = "❌ 雲端同步失敗。<br><small style='font-weight:normal;color:#999;'>請確認已完成試算表「檔案 ➔ 共用 ➔ 發布到網路」的設定，並上傳最新程式碼。</small>";
+            document.getElementById('loadingText').innerHTML = "❌ 雲端資料解析失敗。<br><small style='font-weight:normal;color:#999;'>請確認 Google 部署時「誰可以存取」有選擇「任何人」，並重新提交程式碼。</small>";
         });
 }
 
