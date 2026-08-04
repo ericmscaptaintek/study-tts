@@ -45,10 +45,10 @@
 </div>
 
 <script>
-// ⚠️ 請在下方單引號內，貼上您的 Google 試算表 ID
-const SPREADSHEET_ID = '1FFCYj5HC62m7Pmqp25K9J7vJs2pK7ukLcZjUcjP7H8';
+// 1. 確保 ID 緊密相連，沒有任何空白鍵（這行您已經改對了！）
+const SPREADSHEET_ID = '1FFCYj5HC62m7Pmqp25K9J7vJs2pK7ukLcZjUcjP7H8'; 
 
-// 利用 Google Visualization API 將試算表轉為 JSON 格式抓取
+// 2. 💡 必須改成下方這串完整的 docs.google.com 網址路徑
 const GOOGLE_SHEET_URL = `https://google.com{SPREADSHEET_ID}/gviz/tq?tqx=out:json`;
 
 window.onload = function() {
