@@ -17,13 +17,33 @@
         button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; }
         button:hover { background: #0056b3; }
         .loading { text-align: center; padding: 30px; font-size: 18px; color: #666; font-weight: bold; }
+                /* 登入牆與雙語框樣式 */
+        .login-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:999; }
+        .login-box { background: white; padding: 30px; border-radius: 12px; max-width: 420px; width: 90%; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .login-box h3 { margin-top:0; color:#333; font-size: 20px; margin-bottom: 5px; }
+        .login-box p { color:#555; font-size:14px; line-height: 1.5; margin-top: 5px; margin-bottom: 15px; }
+        .login-box input { width:90%; padding:11px; margin: 10px 0 20px 0; border:1px solid #ccc; border-radius: 6px; font-size:16px; text-align:center; }
+        .login-box button { width:95%; padding:12px; font-size:16px; background:#28a745; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .login-box button:hover { background:#218838; }
     </style>
 </head>
 <body>
+   <!-- 1. 雙語工號登記視窗 -->
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-box">
+        <h3>身分登記 / ID Verification</h3>
+        <p>
+            請輸入您的工號登入學習系統<br>
+            <span style="color:#777; font-size:13px;">Please enter your Employee ID to access the system.</span>
+        </p>
+        <input type="text" id="empIdInput" placeholder="請輸入工號 / Enter Employee ID (e.g. E001)">
+        <button id="loginBtn" onclick="submitLogin()">確認登入 / Log In</button>
+    </div>
+</div> 
 
-<div class="container">
+<div class="container" id="mainContent" style="display:none;">
     <h2>雙語學習表格</h2>
-    <div class="subtitle">📊 內容已與雲端試算表安全即時同步 (學生唯讀發音模式)</div>
+<div class="subtitle" id="subtitleText">📊 內容已與雲端試算表安全即時同步 (學生唯讀發音模式)</div>
 
     <div id="loadingText" class="loading">⏳ 正在從雲端載入最新單字清單，請稍候...</div>
 
@@ -35,7 +55,7 @@
                 <th style="width: 15%;">英文次數<br><small style="font-weight:normal; color:#666;">EN Repeat</small></th>
                 <th>中文內容<br><small style="font-weight:normal; color:#666;">Chinese</small></th>
                 <th style="width: 15%;">中文次數<br><small style="font-weight:normal; color:#666;">CH Repeat</small></th>
-                <th style="width: 15%;">開始發音</th>
+                <th style="width: 15%;">Play Audio<br><small style="font-weight:normal; color:#666;">開始發音</small></th>
             </tr>
         </thead>
         <tbody id="vocabTableBody">
@@ -47,6 +67,55 @@
 <script>
 // ⚠️ 1. 請在下方單引號內，貼上您剛剛在 Google 複製的最新網頁應用程式 URL
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpmOCOMnMcI4g1IddRMI220m4uz1YRV3PFcwUyp54dzg4nSXdmYQkSILSnqMYMlnAzMw/exec'; 
+let myRecordRow = null; 
+
+// 點擊身分登記按鈕 (雙語驗證處理)
+function submitLogin() {
+    const empId = document.getElementById('empIdInput').value.trim();
+    if (!empId) return alert("請輸入工號！\nPlease enter your Employee ID!");
+
+    const loginBtn = document.getElementById('loginBtn');
+    loginBtn.innerText = "驗證中... / Verifying...";
+    loginBtn.disabled = true;
+
+    // 向雲端發送登入檢查
+    fetch(`${GAS_WEB_APP_URL}?action=login&empId=${encodeURIComponent(empId)}`, { method: 'GET', redirect: 'follow' })
+    .then(res => res.text())
+    .then(result => {
+        if (result === "INVALID") {
+            alert("❌ 錯誤：工號不存在或輸入錯誤！\nError: Invalid ID or not in the system list!");
+            location.reload();
+        } else if (result.startsWith("SUCCESS")) {
+            // 登入成功，拿到 Sheet3 的歷史行號
+            myRecordRow = parseInt(result.split("|||")[1]);
+            
+            // 解鎖並顯示單字表格
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('subtitleText').innerText = `Welcome, ID: ${empId.toUpperCase()} | Student Read-Only Mode (學生唯讀發音模式)`;
+            
+            // 開始抓取 Google 單字
+            fetchCloudData();
+            
+            // 💡 核心自動定時回報：每隔 5 分鐘 (300000 毫秒) 自動在背景向雲端報平安
+            setInterval(sendOnlineReport, 300000);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert("連線異常，請確認網路！\nConnection error, please check your network!");
+        location.reload();
+    });
+}
+
+// 自動在背景每5分鐘向雲端更新 Sheet3 的在線時長
+function sendOnlineReport() {
+    if (!myRecordRow) return;
+    fetch(`${GAS_WEB_APP_URL}?action=report&rowNum=${myRecordRow}`, { method: 'GET', redirect: 'follow' })
+    .then(res => res.text())
+    .then(res => console.log("背景在線時長回報完成:", res))
+    .catch(e => console.log("回報失敗:", e));
+}
 
 window.onload = function() {
     fetchCloudData();
@@ -86,24 +155,23 @@ function fetchCloudData() {
                 tr.innerHTML = `
                     <td><b style="color:#666;">${rawId}</b></td>
                     <td class="word-text en-text">${rawEn}</td>
-                    <td>
-                        <select class="en-rep-select">
-                            <option value="1" selected>1 次</option>
-                            <option value="3">3 次</option>
-                            <option value="5">5 次</option>
-                            <option value="10">10 次</option>
-                        </select>
-                    </td>
-                    <td class="word-text ch-text">${rawCh}</td>
-                    <td>
-                        <select class="ch-rep-select">
-                            <option value="1">1 次</option>
-                            <option value="3" selected>3 次</option>
-                            <option value="5">5 次</option>
-                            <option value="10">10 次</option>
-                        </select>
-                    </td>
-                    <td><button onclick="playRow(this)">開始發音</button></td>
+<!-- 💡 局部替換為這段雙語版本 -->
+<td>
+    <select class="en-rep-select">
+        <option value="1" selected>1 次 (Once)</option>
+        <option value="3">3 次 (3 Times)</option>
+        <option value="5">5 次 (5 Times)</option>
+    </select>
+</td>
+<td class="word-text ch-text">${rawCh}</td>
+<td>
+    <select class="ch-rep-select">
+        <option value="1">1 次 (Once)</option>
+        <option value="3" selected>3 次 (3 Times)</option>
+        <option value="5">5 次 (5 Times)</option>
+    </select>
+</td>
+<td><button onclick="playRow(this)">Play Audio</button></td>
                 `;
                 tbody.appendChild(tr);
             }
