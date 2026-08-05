@@ -98,7 +98,7 @@ function submitLogin() {
             fetchCloudData();
             
             // 💡 核心自動定時回報：每隔 5 分鐘 (300000 毫秒) 自動在背景向雲端報平安
-            setInterval(sendOnlineReport, 300000);
+            setInterval(sendOnlineReport, 60000);
         }
     })
     .catch(err => {
